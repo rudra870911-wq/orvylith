@@ -3,7 +3,10 @@ from groq import Groq
 from supabase import create_client, Client
 import time
 
-# Clients initialize karo
+# Page configuration
+st.set_page_config(page_title="Orvylith AI", page_icon="🤖", layout="wide")
+
+# API Clients initialization
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
@@ -20,10 +23,10 @@ SYSTEM_PROMPT = {
     )
 }
 
-# Supabase database functions
+# Supabase Helper Functions
 def get_all_chats():
     try:
-        res = supabase.table("chats").select("id, title").order("created_at", desc=True).execute()
+        res = supabase.table("chats").select("id, title").order("id", desc=True).execute()
         return res.data or []
     except Exception:
         return []
@@ -47,13 +50,13 @@ def save_chat_to_db(chat_id, title, messages):
     except Exception as e:
         st.error(f"Save failed: {e}")
 
-# Session state setup
+# Session State Initialization
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 if "messages" not in st.session_state:
     st.session_state.messages = [SYSTEM_PROMPT]
 
-# --- SIDEBAR: Multi-Chat Navigation ---
+# --- SIDEBAR: Multi-Chat History ---
 with st.sidebar:
     st.title("Orvylith AI")
     if st.button("➕ New Chat", use_container_width=True):
@@ -71,18 +74,21 @@ with st.sidebar:
             st.session_state.messages = get_chat_messages(c["id"])
             st.rerun()
 
-# --- MAIN SCREEN ---
+# --- MAIN SCREEN: Render Existing Chat ---
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
+# --- USER INPUT & AI GENERATION ---
 if prompt := st.chat_input("Message Orvylith..."):
+    # 1. User message show karo aur state me jodo
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     try:
+        # 2. AI response generate karo
         response = client.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=st.session_state.messages,
@@ -90,11 +96,10 @@ if prompt := st.chat_input("Message Orvylith..."):
         )
         reply = response.choices[0].message.content
 
+        # 3. Assistant reply list me daalo
         st.session_state.messages.append({"role": "assistant", "content": reply})
-        with st.chat_message("assistant"):
-            st.markdown(reply)
 
-        # Database me auto-save
+        # 4. Supabase cloud database me save karo
         if st.session_state.current_chat_id is None:
             new_id = int(time.time())
             chat_title = prompt[:20] + "..." if len(prompt) > 20 else prompt
@@ -103,8 +108,8 @@ if prompt := st.chat_input("Message Orvylith..."):
         else:
             save_chat_to_db(st.session_state.current_chat_id, prompt[:20], st.session_state.messages)
 
+        # 5. Page ko fresh state ke sath reload karo taaki duplicate print na ho
+        st.rerun()
+
     except Exception as e:
         st.error(f"Error: {e}")
-    st.session_state.messages.append({"role": "assistant", "content": reply})
-    with st.chat_message("assistant"):
-        st.markdown(reply)
