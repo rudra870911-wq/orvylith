@@ -1,5 +1,9 @@
 import streamlit as st
 from groq import Groq
+import json
+from streamlit_local_storage import LocalStorage
+
+localS = LocalStorage()
 
 # Page configuration
 st.set_page_config(page_title="Orvylith AI", page_icon="⚡", layout="centered")
@@ -42,19 +46,29 @@ system_instruction = (
 # Chat history initialization
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are Orvylith AI, created by Rudra. "
-                "CRITICAL RULES: "
-                "1. You are strictly a text-only assistant (V1.0). "
-                "2. You CANNOT view, process, or accept images. "
-                "3. If asked about image upload or image processing, clearly say: "
-                "'Main abhi images process nahi kar sakta, yeh feature agle update (V2.0) me aayega.' "
-                "4. Do NOT hallucinate, lie, or invent buttons/menus that do not exist."
-            )
-        }
-    ]
+        SYSTEM_PROMPT = {
+    "role": "system",
+    "content": (
+        "You are Orvylith AI, created by Rudra. "
+        "CRITICAL RULES: "
+        "1. You are strictly a text-only assistant (V1.0). "
+        "2. You CANNOT view, process, or accept images. "
+        "3. If asked about image upload or image processing, clearly say: "
+        "'Main abhi images process nahi kar sakta, yeh feature agle update (V2.0) me aayega.' "
+        "4. Do NOT hallucinate, lie, or invent buttons/menus that do not exist."
+    )
+}
+
+saved_chat = localS.getItem("orvylith_chat_history")
+
+if "messages" not in st.session_state:
+    if saved_chat:
+        try:
+            st.session_state.messages = json.loads(saved_chat)
+        except Exception:
+            st.session_state.messages = [SYSTEM_PROMPT]
+    else:
+        st.session_state.messages = [SYSTEM_PROMPT]
 
 # Display conversation history
 for message in st.session_state.messages:
