@@ -62,7 +62,7 @@ if prompt := st.chat_input("Message Orvylith..."):
     ]
 
     response = client.chat.completions.create(
-        model="llama3-8b-8192",
+        model="gemma2-9b-it",
         messages=messages_payload,
     )
     reply = response.choices[0].message.content
