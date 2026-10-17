@@ -62,7 +62,7 @@ if prompt := st.chat_input("Message Orvylith..."):
 
     try:
         response = client.chat.completions.create(
-            model="qwen-2.5-32b",
+            model="openai/gpt-oss-20b",
             messages=formatted_messages,
         )
         reply = response.choices[0].message.content
