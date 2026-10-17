@@ -41,7 +41,20 @@ system_instruction = (
 
 # Chat history initialization
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are Orvylith AI, created by Rudra. "
+                "CRITICAL RULES: "
+                "1. You are strictly a text-only assistant (V1.0). "
+                "2. You CANNOT view, process, or accept images. "
+                "3. If asked about image upload or image processing, clearly say: "
+                "'Main abhi images process nahi kar sakta, yeh feature agle update (V2.0) me aayega.' "
+                "4. Do NOT hallucinate, lie, or invent buttons/menus that do not exist."
+            )
+        }
+    ]
 
 # Display conversation history
 for msg in st.session_state.messages:
@@ -62,10 +75,11 @@ if prompt := st.chat_input("Message Orvylith..."):
         formatted_messages.append({"role": m["role"], "content": m["content"]})
 
     try:
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=formatted_messages,
-        )
+response = client.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=st.session_state.messages,
+    temperature=0.2,
+)
         reply = response.choices[0].message.content
     except Exception as e:
         reply = f"Error: {e}"
