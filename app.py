@@ -57,9 +57,10 @@ if "messages" not in st.session_state:
     ]
 
 # Display conversation history
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+for message in st.session_state.messages:
+    if message["role"] != "system":  # System prompt ko skip karega
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 # Chat input from user
 if prompt := st.chat_input("Message Orvylith..."):
