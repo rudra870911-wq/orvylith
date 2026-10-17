@@ -1,106 +1,110 @@
 import streamlit as st
 from groq import Groq
-import json
-from streamlit_local_storage import LocalStorage
+from supabase import create_client, Client
+import time
 
-localS = LocalStorage()
-
-# Page configuration
-st.set_page_config(page_title="Orvylith AI", page_icon="⚡", layout="centered")
-
-# Custom Styling
-st.markdown("""
-<style>
-    .stChatInput {position: fixed; bottom: 20px;}
-</style>
-""", unsafe_allow_html=True)
-
-# Sidebar - Developer Profile
-with st.sidebar:
-    st.title("⚡ Orvylith")
-    st.caption("Next-Gen Personal AI Assistant")
-    st.write("---")
-    st.subheader("👨‍💻 About Developer")
-    st.write("**Name:** Rudra")
-    st.write("**Role:** Founder & AI Developer")
-    st.write("**About:** Built by Rudra as a dedicated conversational intelligence project.")
-    st.write("---")
-    st.caption("System Status: 🟢 Fully Operational")
-
-# Header
-st.title("⚡ Orvylith AI")
-st.write("Welcome! I am Orvylith, an AI assistant developed by **Rudra**.")
-st.caption("Ask me anything — general queries, ideas, or questions about my creation.")
-
-# Groq API Client Setup
+# Clients initialize karo
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-# System identity instruction
-system_instruction = (
-    "Identity: Your name is Orvylith. You are an AI assistant developed by Rudra. "
-    "About Developer: Rudra is an independent student developer from India who built this project using Python and Streamlit. "
-    "Privacy & Truth: Never claim Rudra has a PhD, is a researcher, or works at a large tech firm. Do not leak private info like exact school, contact numbers, or home address. "
-    "Language & Tone: If the user talks in Hinglish (Hindi written in English alphabet) or Hindi, you MUST reply back in friendly, natural Hinglish. Match the user's language style perfectly."
-)
+SYSTEM_PROMPT = {
+    "role": "system",
+    "content": (
+        "You are Orvylith AI, created by Rudra. "
+        "CRITICAL RULES: "
+        "1. You are strictly a text-only assistant (V1.0). "
+        "2. You CANNOT view, process, or accept images. "
+        "3. If asked about image upload or image processing, clearly say: "
+        "'Main abhi images process nahi kar sakta, yeh feature agle update (V2.0) me aayega.' "
+        "4. Do NOT hallucinate, lie, or invent buttons/menus that do not exist."
+    )
+}
 
-# Chat history initialization
+# Supabase database functions
+def get_all_chats():
+    try:
+        res = supabase.table("chats").select("id, title").order("created_at", desc=True).execute()
+        return res.data or []
+    except Exception:
+        return []
+
+def get_chat_messages(chat_id):
+    try:
+        res = supabase.table("chats").select("messages").eq("id", chat_id).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]["messages"]
+    except Exception:
+        pass
+    return [SYSTEM_PROMPT]
+
+def save_chat_to_db(chat_id, title, messages):
+    try:
+        supabase.table("chats").upsert({
+            "id": chat_id,
+            "title": title,
+            "messages": messages
+        }).execute()
+    except Exception as e:
+        st.error(f"Save failed: {e}")
+
+# Session state setup
+if "current_chat_id" not in st.session_state:
+    st.session_state.current_chat_id = None
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are Orvylith AI, created by Rudra. "
-                "CRITICAL RULES: "
-                "1. You are strictly a text-only assistant (V1.0). "
-                "2. You CANNOT view, process, or accept images. "
-                "3. If asked about image upload or image processing, clearly say: "
-                "'Main abhi images process nahi kar sakta, yeh feature agle update (V2.0) me aayega.' "
-                "4. Do NOT hallucinate, lie, or invent buttons/menus that do not exist."
-            )
-        }
-    ]
+    st.session_state.messages = [SYSTEM_PROMPT]
 
-saved_chat = localS.getItem("orvylith_chat_history")
-
-if "messages" not in st.session_state:
-    if saved_chat:
-        try:
-            st.session_state.messages = json.loads(saved_chat)
-        except Exception:
-            st.session_state.messages = [SYSTEM_PROMPT]
-    else:
+# --- SIDEBAR: Multi-Chat Navigation ---
+with st.sidebar:
+    st.title("Orvylith AI")
+    if st.button("➕ New Chat", use_container_width=True):
+        st.session_state.current_chat_id = None
         st.session_state.messages = [SYSTEM_PROMPT]
+        st.rerun()
 
-# Display conversation history
-for message in st.session_state.messages:
-    if message["role"] != "system":  # System prompt ko skip karega
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    st.markdown("---")
+    st.subheader("Previous Chats")
+    chats = get_all_chats()
+    for c in chats:
+        btn_label = c.get("title") or f"Chat {c['id']}"
+        if st.button(btn_label, key=f"chat_{c['id']}", use_container_width=True):
+            st.session_state.current_chat_id = c["id"]
+            st.session_state.messages = get_chat_messages(c["id"])
+            st.rerun()
 
-# Chat input from user
+# --- MAIN SCREEN ---
+for msg in st.session_state.messages:
+    if msg["role"] != "system":
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
 if prompt := st.chat_input("Message Orvylith..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Format messages safely
-    formatted_messages = [
-        {"role": "system", "content": system_instruction}
-    ]
-    for m in st.session_state.messages:
-        formatted_messages.append({"role": m["role"], "content": m["content"]})
-
     try:
         response = client.chat.completions.create(
-    model="openai/gpt-oss-20b",  # ya jo pehle chal raha tha (jaise llama3-70b-8192 ya llama3-8b-8192)
-    messages=st.session_state.messages,
-    temperature=0.2,
-)
-  
+            model="openai/gpt-oss-20b",
+            messages=st.session_state.messages,
+            temperature=0.2,
+        )
         reply = response.choices[0].message.content
-    except Exception as e:
-        reply = f"Error: {e}"
 
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+        with st.chat_message("assistant"):
+            st.markdown(reply)
+
+        # Database me auto-save
+        if st.session_state.current_chat_id is None:
+            new_id = int(time.time())
+            chat_title = prompt[:20] + "..." if len(prompt) > 20 else prompt
+            st.session_state.current_chat_id = new_id
+            save_chat_to_db(new_id, chat_title, st.session_state.messages)
+        else:
+            save_chat_to_db(st.session_state.current_chat_id, prompt[:20], st.session_state.messages)
+
+    except Exception as e:
+        st.error(f"Error: {e}")
     st.session_state.messages.append({"role": "assistant", "content": reply})
     with st.chat_message("assistant"):
         st.markdown(reply)
