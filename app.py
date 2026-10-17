@@ -77,7 +77,7 @@ if prompt := st.chat_input("Message Orvylith..."):
 
     try:
         response = client.chat.completions.create(
-    model="llama-3.1-70b-versatile",  # ya jo pehle chal raha tha (jaise llama3-70b-8192 ya llama3-8b-8192)
+    model="openai/gpt-oss-20b",  # ya jo pehle chal raha tha (jaise llama3-70b-8192 ya llama3-8b-8192)
     messages=st.session_state.messages,
     temperature=0.2,
 )
